@@ -2,17 +2,21 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Xcortex | Generative Light</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Gathering Light</title>
     <style>
-        body {
+        * {
             margin: 0;
             padding: 0;
-            background-color: #000; /* Чистый черный для контраста */
+            box-sizing: border-box;
+        }
+
+        body {
             overflow: hidden;
-            touch-action: none; /* Отключаем системные жесты браузера */
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: white;
+            background: #000;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+            cursor: crosshair;
         }
 
         canvas {
@@ -21,71 +25,670 @@
             height: 100vh;
         }
 
-        /* Меню управления */
-        .ui-container {
-            position: fixed;
-            bottom: 20px;
-            left: 0;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            z-index: 10;
-            pointer-events: none; /* Чтобы клики проходили сквозь пустые зоны */
-        }
-
-        .mode-btn {
-            pointer-events: auto;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: #fff;
-            padding: 10px 20px;
-            border-radius: 30px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-            letter-spacing: 1px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-        }
-
-        .mode-btn.active {
-            background: rgba(255, 255, 255, 0.9);
-            color: #000;
-            box-shadow: 0 0 20px rgba(255, 255, 255, 0.6);
-            transform: scale(1.05);
-        }
-
-        .hint-text {
+        /* Эффект жидкого стекла для подсказки */
+        .hint-overlay {
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            opacity: 0.5;
-            pointer-events: none;
-            animation: fadeOut 3s forwards;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px 40px;
+            color: rgba(255, 255, 255, 0.7);
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
             text-align: center;
+            pointer-events: none;
+            transition: opacity 1.5s ease;
+            z-index: 10;
         }
 
-        @keyframes fadeOut {
-            to { opacity: 0; visibility: hidden; }
+        .hint-overlay.hidden {
+            opacity: 0;
+        }
+
+        .hint-overlay h2 {
+            font-size: 20px;
+            margin-bottom: 10px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .hint-overlay p {
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        /* Верхняя панель управления */
+        .top-bar {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            display: flex;
+            gap: 10px;
+            z-index: 20;
+        }
+
+        .ctrl-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .ctrl-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            transform: scale(1.1);
+        }
+
+        /* Индикатор цвета внизу */
+        .color-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            z-index: 20;
+        }
+
+        .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .color-dot.active {
+            transform: scale(1.4);
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .color-dot:hover {
+            transform: scale(1.3);
+        }
+
+        /* Статистика */
+        .stats {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.3);
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            z-index: 20;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
+    <canvas id="mainCanvas"></canvas>
 
-    <div class="hint-text">Tap anywhere to create light patterns</div>
-
-    <canvas id="artCanvas"></canvas>
-
-    <div class="ui-container">
-        <button class="mode-btn active" onclick="setMode('starburst')" id="btn-starburst">Starburst</button>
-        <button class="mode-btn" onclick="setMode('rain')" id="btn-rain">Light Rain</button>
-        <button class="mode-btn" onclick="setMode('firework')" id="btn-firework">Firework</button>
+    <div class="hint-overlay" id="hintOverlay">
+        <h2>Gathering Light</h2>
+        <p>Тапай по экрану,<br>чтобы создать свет ✨<br><br>Удерживай — для новых узоров<br>Двойной тап — смена палитры</p>
     </div>
 
-    <script src="light_engine.js"></script>
+    <div class="top-bar">
+        <button class="ctrl-btn" id="clearBtn" title="Очистить">✕</button>
+        <button class="ctrl-btn" id="saveBtn" title="Сохранить">💾</button>
+        <button class="ctrl-btn" id="paletteBtn" title="Сменить палитру">🎨</button>
+    </div>
+
+    <div class="color-indicator" id="colorIndicator"></div>
+
+    <div class="stats" id="stats"></div>
+
+    <script>
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+const hint = document.getElementById('hintOverlay');
+const statsEl = document.getElementById('stats');
+const colorIndicator = document.getElementById('colorIndicator');
+
+// --- Настройки ---
+let W, H;
+let particles = [];
+let lines = [];
+let circles = [];
+let tapCount = 0;
+let isPressed = false;
+let pressStart = 0;
+let mouseX = 0, mouseY = 0;
+let currentPaletteIndex = 0;
+let globalHueShift = 0;
+
+// Палитры цветов (как в Triple A — фиолетовый, розовый, белый, синий)
+const palettes = [
+    // Фиолетово-розовая (основная как в видео)
+    ['#ff00ff', '#cc00ff', '#aa44ff', '#ffffff', '#ff44cc'],
+    // Золото-оранжевая
+    ['#ffaa00', '#ff6600', '#ffdd44', '#ffffff', '#ff8800'],
+    // Ледяная
+    ['#00ccff', '#0066ff', '#44eeff', '#ffffff', '#00aaff'],
+    // Неон зелёная
+    ['#00ff66', '#00ff00', '#88ff00', '#ffffff', '#00ffaa'],
+    // Радужная
+    ['#ff0000', '#ffff00', '#00ff00', '#0000ff', '#ff00ff']
+];
+
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// --- Классы объектов ---
+
+class Particle {
+    constructor(x, y, angle, speed, color, life) {
+        this.x = x;
+        this.y = y;
+        this.angle = angle;
+        this.speed = speed;
+        this.color = color;
+        this.life = life || 120;
+        this.maxLife = this.life;
+        this.size = Math.random() * 2 + 0.5;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vx *= 0.98;
+        this.vy *= 0.98;
+        this.life--;
+    }
+
+    draw() {
+        const alpha = this.life / this.maxLife;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * alpha, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = alpha * 0.8;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+}
+
+class LineBurst {
+    constructor(x, y, count, length, color, spread) {
+        this.lines = [];
+        for (let i = 0; i < count; i++) {
+            const angle = (Math.PI * 2 / count) * i + Math.random() * spread;
+            const len = length * (0.5 + Math.random() * 0.5);
+            this.lines.push({
+                x1: x, y1: y,
+                x2: x + Math.cos(angle) * len,
+                y2: y + Math.sin(angle) * len,
+                angle: angle,
+                progress: 0,
+                speed: 0.02 + Math.random() * 0.03,
+                color: color,
+                width: Math.random() * 2 + 0.5
+            });
+        }
+        this.life = 180;
+        this.maxLife = 180;
+    }
+
+    update() {
+        this.lines.forEach(l => {
+            if (l.progress < 1) l.progress += l.speed;
+        });
+        this.life--;
+    }
+
+    draw() {
+        const fadeAlpha = Math.min(1, this.life / 60);
+        this.lines.forEach(l => {
+            const cx = l.x1 + (l.x2 - l.x1) * l.progress;
+            const cy = l.y1 + (l.y2 - l.y1) * l.progress;
+            ctx.beginPath();
+            ctx.moveTo(l.x1, l.y1);
+            ctx.lineTo(cx, cy);
+            ctx.strokeStyle = l.color;
+            ctx.lineWidth = l.width;
+            ctx.globalAlpha = fadeAlpha * 0.7;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+        });
+    }
+}
+
+class GlowCircle {
+    constructor(x, y, maxRadius, color) {
+        this.x = x;
+        this.y = y;
+        this.radius = 0;
+        this.maxRadius = maxRadius;
+        this.color = color;
+        this.growing = true;
+        this.alpha = 0.6;
+        this.rays = Math.floor(Math.random() * 20) + 10;
+    }
+
+    update() {
+        if (this.growing) {
+            this.radius += (this.maxRadius - this.radius) * 0.05;
+            if (this.radius >= this.maxRadius - 2) {
+                this.growing = false;
+            }
+        } else {
+            this.alpha -= 0.005;
+        }
+    }
+
+    draw() {
+        if (this.alpha <= 0) return;
+
+        // Круг
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = this.alpha;
+        ctx.stroke();
+
+        // Лучи внутри круга
+        for (let i = 0; i < this.rays; i++) {
+            const angle = (Math.PI * 2 / this.rays) * i;
+            const innerR = this.radius * 0.1;
+            ctx.beginPath();
+            ctx.moveTo(
+                this.x + Math.cos(angle) * innerR,
+                this.y + Math.sin(angle) * innerR
+            );
+            ctx.lineTo(
+                this.x + Math.cos(angle) * this.radius,
+                this.y + Math.sin(angle) * this.radius
+            );
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = 0.5;
+            ctx.globalAlpha = this.alpha * 0.4;
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+    }
+}
+
+class SpiralPattern {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.points = [];
+        this.angle = 0;
+        this.radius = 0;
+        this.life = 200;
+        this.maxLife = 200;
+        this.direction = Math.random() > 0.5 ? 1 : -1;
+    }
+
+    update() {
+        this.angle += 0.15 * this.direction;
+        this.radius += 1.2;
+        if (this.radius < 150) {
+            this.points.push({
+                x: this.x + Math.cos(this.angle) * this.radius,
+                y: this.y + Math.sin(this.angle) * this.radius
+            });
+        }
+        this.life--;
+    }
+
+    draw() {
+        if (this.points.length < 2) return;
+        const fadeAlpha = Math.min(1, this.life / 80);
+        ctx.beginPath();
+        ctx.moveTo(this.points[0].x, this.points[0].y);
+        for (let i = 1; i < this.points.length; i++) {
+            ctx.lineTo(this.points[i].x, this.points[i].y);
+        }
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = fadeAlpha * 0.6;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+}
+
+class RadialDots {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.dots = [];
+        this.rings = Math.floor(Math.random() * 3) + 2;
+        this.life = 150;
+        this.maxLife = 150;
+
+        for (let r = 0; r < this.rings; r++) {
+            const radius = 20 + r * 25;
+            const count = 8 + r * 6;
+            for (let i = 0; i < count; i++) {
+                const angle = (Math.PI * 2 / count) * i;
+                this.dots.push({
+                    tx: x + Math.cos(angle) * radius,
+                    ty: y + Math.sin(angle) * radius,
+                    x: x, y: y,
+                    size: Math.random() * 3 + 1
+                });
+            }
+        }
+    }
+
+    update() {
+        this.dots.forEach(d => {
+            d.x += (d.tx - d.x) * 0.08;
+            d.y += (d.ty - d.y) * 0.08;
+        });
+        this.life--;
+    }
+
+    draw() {
+        const fadeAlpha = Math.min(1, this.life / 50);
+        this.dots.forEach(d => {
+            ctx.beginPath();
+            ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+            ctx.fillStyle = this.color;
+            ctx.globalAlpha = fadeAlpha * 0.7;
+            ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+    }
+}
+
+class StarField {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.stars = [];
+        this.life = 120;
+        this.maxLife = 120;
+
+        for (let i = 0; i < 5; i++) {
+            const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
+            const dist = 30 + Math.random() * 40;
+            this.stars.push({
+                x: x + Math.cos(angle) * dist,
+                y: y + Math.sin(angle) * dist,
+                size: Math.random() * 4 + 2
+            });
+        }
+    }
+
+    update() {
+        this.life--;
+    }
+
+    draw() {
+        const fadeAlpha = Math.min(1, this.life / 40);
+        // Линии между звёздами (звезда)
+        ctx.beginPath();
+        ctx.moveTo(this.stars[0].x, this.stars[0].y);
+        for (let i = 1; i < this.stars.length; i++) {
+            ctx.lineTo(this.stars[i].x, this.stars[i].y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 0.8;
+        ctx.globalAlpha = fadeAlpha * 0.5;
+        ctx.stroke();
+
+        // Точки
+        this.stars.forEach(s => {
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.size * fadeAlpha, 0, Math.PI * 2);
+            ctx.fillStyle = this.color;
+            ctx.globalAlpha = fadeAlpha * 0.8;
+            ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+    }
+}
+    </script>
+    <script>
+// --- Функции создания эффектов ---
+
+function getColor() {
+    const palette = palettes[currentPaletteIndex];
+    return palette[Math.floor(Math.random() * palette.length)];
+}
+
+function createTapEffect(x, y) {
+    const type = Math.floor(Math.random() * 5);
+    const color = getColor();
+
+    switch(type) {
+        case 0: // Взрыв линий
+            lines.push(new LineBurst(x, y, 
+                Math.floor(Math.random() * 30) + 15, 
+                Math.random() * 150 + 80, 
+                color, 0.3));
+            break;
+        case 1: // Светящийся круг с лучами
+            circles.push(new GlowCircle(x, y, 
+                Math.random() * 80 + 40, color));
+            break;
+        case 2: // Спираль
+            circles.push(new SpiralPattern(x, y, color));
+            break;
+        case 3: // Радиальные точки
+            circles.push(new RadialDots(x, y, color));
+            break;
+        case 4: // Звездное поле
+            circles.push(new StarField(x, y, color));
+            break;
+    }
+
+    // Частицы вокруг
+    for (let i = 0; i < 12; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 3 + 1;
+        particles.push(new Particle(x, y, angle, speed, color, 80 + Math.random() * 40));
+    }
+
+    tapCount++;
+    hideHint();
+}
+
+function createHoldEffect(x, y) {
+    // При удержании — непрерывно создаёт мелкие эффекты
+    const color = getColor();
+    
+    // Маленькие искры
+    for (let i = 0; i < 3; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 2 + 0.5;
+        particles.push(new Particle(x, y, angle, speed, color, 60));
+    }
+
+    // Иногда линия
+    if (Math.random() > 0.7) {
+        lines.push(new LineBurst(x, y, 
+            Math.floor(Math.random() * 8) + 4, 
+            Math.random() * 60 + 20, 
+            color, 0.5));
+    }
+
+    // Иногда маленький круг
+    if (Math.random() > 0.85) {
+        circles.push(new GlowCircle(x, y, 
+            Math.random() * 30 + 10, color));
+    }
+}
+
+function doubleTapAction() {
+    currentPaletteIndex = (currentPaletteIndex + 1) % palettes.length;
+    buildColorIndicator();
+    // Вспышка при смене палитры
+    const color = getColor();
+    for (let i = 0; i < 30; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        particles.push(new Particle(W/2, H/2, angle, Math.random()*5+2, color, 100));
+    }
+}
+
+// --- Обработка событий ---
+
+let lastTapTime = 0;
+let holdInterval = null;
+
+function getPos(e) {
+    if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    return { x: e.clientX, y: e.clientY };
+}
+
+function onDown(e) {
+    e.preventDefault();
+    const pos = getPos(e);
+    mouseX = pos.x;
+    mouseY = pos.y;
+    isPressed = true;
+    pressStart = Date.now();
+
+    // Проверка двойного тапа
+    const now = Date.now();
+    if (now - lastTapTime < 300) {
+        doubleTapAction();
+        lastTapTime = 0;
+        return;
+    }
+    lastTapTime = now;
+
+    // Одиночный тап — эффект сразу
+    createTapEffect(pos.x, pos.y);
+
+    // Запуск эффекта удержания через задержку
+    holdInterval = setInterval(() => {
+        if (isPressed) {
+            createHoldEffect(mouseX, mouseY);
+        }
+    }, 50);
+}
+
+function onMove(e) {
+    e.preventDefault();
+    if (!isPressed) return;
+    const pos = getPos(e);
+    mouseX = pos.x;
+    mouseY = pos.y;
+}
+
+function onUp(e) {
+    e.preventDefault();
+    isPressed = false;
+    if (holdInterval) {
+        clearInterval(holdInterval);
+        holdInterval = null;
+    }
+}
+
+canvas.addEventListener('mousedown', onDown);
+canvas.addEventListener('mousemove', onMove);
+canvas.addEventListener('mouseup', onUp);
+canvas.addEventListener('touchstart', onDown, { passive: false });
+canvas.addEventListener('touchmove', onMove, { passive: false });
+canvas.addEventListener('touchend', onUp, { passive: false });
+
+// --- Подсказка ---
+function hideHint() {
+    if (tapCount === 1) {
+        setTimeout(() => hint.classList.add('hidden'), 500);
+    }
+}
+
+// --- Палитра индикатор ---
+function buildColorIndicator() {
+    colorIndicator.innerHTML = '';
+    palettes[currentPaletteIndex].forEach((c, i) => {
+        const dot = document.createElement('div');
+        dot.className = 'color-dot' + (i === 0 ? ' active' : '');
+        dot.style.backgroundColor = c;
+        dot.style.color = c;
+        colorIndicator.appendChild(dot);
+    });
+}
+buildColorIndicator();
+
+// --- Кнопки ---
+document.getElementById('clearBtn').addEventListener('click', () => {
+    particles = [];
+    lines = [];
+    circles = [];
+    tapCount = 0;
+});
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.download = `gathering-light-${Date.now()}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+});
+
+document.getElementById('paletteBtn').addEventListener('click', () => {
+    doubleTapAction();
+});
+
+// --- Анимационный цикл ---
+function animate() {
+    // Полупрозрачное затухание (эффект шлейфа)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Обновление и отрисовка частиц
+    particles = particles.filter(p => p.life > 0);
+    particles.forEach(p => { p.update(); p.draw(); });
+
+    // Обновление и отрисовка линий
+    lines = lines.filter(l => l.life > 0);
+    lines.forEach(l => { l.update(); l.draw(); });
+
+    // Обновление и отрисовка кругов/паттернов
+    circles = circles.filter(c => {
+        if (c instanceof GlowCircle) return c.alpha > 0;
+        return c.life > 0;
+    });
+    circles.forEach(c => { c.update(); c.draw(); });
+
+    // Глобальный сдвиг оттенка (медленный дрейф)
+    globalHueShift += 0.1;
+
+    // Статистика
+    statsEl.textContent = `taps: ${tapCount} | objects: ${particles.length + lines.length + circles.length}`;
+
+    requestAnimationFrame(animate);
+}
+
+// Начальная очистка
+ctx.fillStyle = '#000';
+ctx.fillRect(0, 0, W, H);
+
+animate();
+                         </script>
 </body>
 </html>
